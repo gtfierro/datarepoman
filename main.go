@@ -82,6 +82,10 @@ func main() {
 					Value: 10,
 					Usage: "How many UUIDs to fetch at a time",
 				},
+				cli.BoolFlag{
+					Name:  "legacy",
+					Usage: "True if we are talking to sMAP python archiver 2.0",
+				},
 			},
 		},
 	}

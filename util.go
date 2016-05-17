@@ -24,8 +24,9 @@ func getUUIDChunks(params *downloadParams) chan downloadParams {
 	go func(chunks chan downloadParams, params *downloadParams) {
 		idx := 0
 		chunk := downloadParams{
-			start: params.start,
-			end:   params.end,
+			start:  params.start,
+			end:    params.end,
+			legacy: params.legacy,
 		}
 		for idx <= len(params.uuids) {
 			upperBound := idx + params.uuidChunkSize

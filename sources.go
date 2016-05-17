@@ -15,6 +15,7 @@ type downloadParams struct {
 	all           bool
 	start         time.Time
 	end           time.Time
+	legacy        bool
 }
 
 func (dl *downloadParams) print() {
@@ -38,6 +39,7 @@ func getDownloadParams(c *cli.Context) *downloadParams {
 		all:           c.Bool("all"),
 		uuids:         strings.Split(c.String("uuids"), ","),
 		uuidChunkSize: c.Int("uuidchunk"),
+		legacy:        c.Bool("legacy"),
 	}
 	start, err = now.Parse(c.String("from"))
 	if err != nil {
@@ -56,9 +58,13 @@ func getDownloadParams(c *cli.Context) *downloadParams {
 	return dl
 }
 
-func (dl downloadParams) ToSmap() string {
+func (dl *downloadParams) ToSmap() string {
 	start := dl.start.Unix()
 	end := dl.end.Unix()
+	if dl.legacy { // turn into milliseconds
+		start *= 1000
+		end *= 1000
+	}
 	query := fmt.Sprintf("select data in (%d, %d) where ", start, end)
 	for i, uuid := range dl.uuids {
 		query = query + fmt.Sprintf("uuid = '%s'", uuid)
