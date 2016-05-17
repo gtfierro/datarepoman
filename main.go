@@ -88,6 +88,43 @@ func main() {
 				},
 			},
 		},
+		{
+			Name:   "metadata",
+			Usage:  "Download metadata",
+			Action: metadata,
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "uuids",
+					Value: "",
+					Usage: "List of UUIDs to download. Can also use -a for all streams",
+				},
+				cli.BoolFlag{
+					Name:  "all, a",
+					Usage: "If specified, downloads *all* streams from the data source. Overrides -uuids",
+				},
+				cli.StringFlag{
+					Name:  "where",
+					Usage: "Metadata query to download UUIDs",
+				},
+			},
+		},
+		{
+			Name:   "ingest",
+			Usage:  "Load data in via sMAP",
+			Action: ingest,
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "metadata,md",
+					Value: "metadata.json",
+					Usage: "JSON file to load metadata from",
+				},
+				cli.StringFlag{
+					Name:  "datafile",
+					Value: "out.csv",
+					Usage: "CSV file of data: uuid,time,value",
+				},
+			},
+		},
 	}
 
 	app.Run(os.Args)

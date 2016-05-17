@@ -81,4 +81,7 @@ type source interface {
 	Connect() error
 	AddDestination(dest destination)
 	Download(c *cli.Context) error
+	GetMetadata(c *cli.Context) error
+	LoadMetadata(c *cli.Context) error
+	LoadData(c *cli.Context) error
 }

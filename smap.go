@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"github.com/codegangsta/cli"
@@ -9,6 +10,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 )
 
@@ -121,11 +124,126 @@ func (smap *sMAPSource) doDownload(params downloadParams) error {
 	return nil
 }
 
+func (smap *sMAPSource) GetMetadata(c *cli.Context) error {
+	var resp *http.Response
+	var err error
+	var query = bytes.NewBufferString(fmt.Sprintf("select * where %s;", c.String("where")))
+	resp, err = smap.client.Post(smap.host, MIME_TEXT, query)
+	if err != nil {
+		return errors.Wrap(err, "Could not post query to sMAP archiver")
+	}
+	var metadata []map[string]interface{}
+	var decoder = json.NewDecoder(resp.Body)
+	if err := decoder.Decode(&metadata); err != nil {
+		return errors.Wrap(err, "Could not download metadata from sMAP archiver")
+	}
+
+	f, err := os.Create("metadata.json")
+	if err != nil {
+		log.Fatal(err, "Could not open JSON destination")
+	}
+	writer := json.NewEncoder(f)
+	return writer.Encode(metadata)
+}
+
+func (smap *sMAPSource) LoadMetadata(c *cli.Context) error {
+	var metadata []smapMessage
+	var resp *http.Response
+	var err error
+	file, err := os.Open(c.String("metadata"))
+	if err != nil {
+		return errors.Wrap(err, "Could not open metadata file")
+	}
+	var decoder = json.NewDecoder(file)
+	if err := decoder.Decode(&metadata); err != nil {
+		return errors.Wrap(err, "Could no decode metadata file")
+	}
+	for _, doc := range metadata {
+		var ingestmd = make(map[string]smapMessage)
+		if doc.Path == "" {
+			log.Error("Doc has no Path")
+			continue
+		}
+		if doc.UUID == "" {
+			log.Error("Doc has no UUID")
+			continue
+		}
+		path := doc.Path
+		doc.Path = ""
+		ingestmd[path] = doc
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		if err := enc.Encode(ingestmd); err != nil {
+			return errors.Wrap(err, "Could not ingest metadata")
+		}
+		resp, err = smap.client.Post(smap.host, MIME_JSON, &buf)
+		if err != nil {
+			return errors.Wrap(err, "Could not post metadata to sMAP archiver")
+		}
+		if resp.StatusCode != 200 {
+			return errors.Wrap(errors.New(resp.Status), "Could not save data to sMAP archiver")
+		}
+	}
+
+	return nil
+}
+
+func (smap *sMAPSource) LoadData(c *cli.Context) error {
+	var resp *http.Response
+	var err error
+	file, err := os.Open(c.String("datafile"))
+	if err != nil {
+		return errors.Wrap(err, "Could not open metadata file")
+	}
+
+	var reader = csv.NewReader(file)
+	reader.Read() // skip first line
+	for {
+		line, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return errors.Wrap(err, "Could not read CSV data file")
+		}
+		if len(line) != 3 {
+			return fmt.Errorf("Line had more than 3 entries: %v", line)
+		}
+		uuid := line[0]
+		time, err := time.Parse(time.RFC3339, line[1])
+		if err != nil {
+			return errors.Wrap(err, "Could not parse timestamp")
+		}
+		value, err := strconv.ParseFloat(line[2], 64)
+		if err != nil {
+			return errors.Wrap(err, "Could not parse value as float")
+		}
+		//fmt.Println(uuid, time, uint64(time.Unix())*1000)
+		//return nil
+		msg := smapMessage{UUID: uuid, Readings: []reading{reading{Time: uint64(time.Unix()) * 1e9, Value: value}}}
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		if err := enc.Encode(map[string]interface{}{msg.Path: msg}); err != nil {
+			return errors.Wrap(err, "Could not ingest data")
+		}
+		resp, err = smap.client.Post(smap.host, MIME_JSON, &buf)
+		if err != nil {
+			return errors.Wrap(err, "Could not post data to sMAP archiver")
+		}
+		if resp.StatusCode != 200 {
+			return errors.Wrap(errors.New(resp.Status), "Could not save data to sMAP archiver")
+		}
+	}
+	return nil
+}
+
 type smapMessage struct {
 	// Readings for this message
-	Readings []reading
-	// Unique identifier for this stream. Should be empty for Collections
-	UUID string `json:"uuid"`
+	Readings   []reading              `json:",omitempty"`
+	UUID       string                 `json:"uuid"`
+	Properties map[string]interface{} `json:",omitempty"`
+	Metadata   map[string]interface{} `json:",omitempty"`
+	Path       string                 `json:",omitempty"`
 }
 
 // Reading implementation for numerical data
@@ -134,6 +252,12 @@ type reading struct {
 	Time uint64
 	// value associated with this timestamp
 	Value float64
+}
+
+func (rdg *reading) MarshalJSON() ([]byte, error) {
+	floatString := strconv.FormatFloat(rdg.Value, 'f', -1, 64)
+	timeString := strconv.FormatUint(rdg.Time, 10)
+	return json.Marshal([]json.Number{json.Number(timeString), json.Number(floatString)})
 }
 
 func (rdg *reading) UnmarshalJSON(b []byte) (err error) {
