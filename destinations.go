@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
-	giles "github.com/gtfierro/giles2/archiver"
 	"os"
 	"time"
 )
@@ -14,14 +13,14 @@ type row struct {
 	Value float64
 }
 
-func rowsFromSmapMessage(msg *giles.SmapMessage) chan row {
+func rowsFromSmapMessage(msg *smapMessage) chan row {
 	c := make(chan row)
 	go func() {
 		for _, rdg := range msg.Readings {
 			c <- row{
 				UUID:  string(msg.UUID),
-				Time:  time.Unix(int64(rdg.GetTime())/1000, 0),
-				Value: rdg.GetValue().(float64),
+				Time:  time.Unix(int64(rdg.Time)/1000, 0),
+				Value: rdg.Value,
 			}
 		}
 		close(c)

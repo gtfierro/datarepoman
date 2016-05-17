@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/codegangsta/cli"
-	giles "github.com/gtfierro/giles2/archiver"
 	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
@@ -86,10 +85,13 @@ func (smap *sMAPSource) Download(c *cli.Context) error {
 }
 
 func (smap *sMAPSource) startDownloadLoop(params *downloadParams) error {
+	var err error
 	params.print()
-	log.Debug("Generated sMAP query:", params.ToSmap())
 	for downloadChunk := range getUUIDChunks(params) {
-		smap.doDownload(downloadChunk)
+		log.Debug("Generated sMAP query:", downloadChunk.ToSmap())
+		if err = smap.doDownload(downloadChunk); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -100,7 +102,7 @@ func (smap *sMAPSource) doDownload(params downloadParams) error {
 	if err != nil {
 		return errors.Wrap(err, "Could not post query to sMAP archiver")
 	}
-	var data []giles.SmapMessage
+	var data []smapMessage
 	var databuf bytes.Buffer
 	tee := io.TeeReader(resp.Body, &databuf)
 	var decoder = json.NewDecoder(tee)
@@ -117,4 +119,53 @@ func (smap *sMAPSource) doDownload(params downloadParams) error {
 		}
 	}
 	return nil
+}
+
+type smapMessage struct {
+	// Readings for this message
+	Readings []reading
+	// Unique identifier for this stream. Should be empty for Collections
+	UUID string `json:"uuid"`
+}
+
+// Reading implementation for numerical data
+type reading struct {
+	// uint64 timestamp
+	Time uint64
+	// value associated with this timestamp
+	Value float64
+}
+
+func (rdg *reading) UnmarshalJSON(b []byte) (err error) {
+	var (
+		v          []interface{}
+		time       uint64
+		time_weird float64
+		value      float64
+		ok         bool
+	)
+	if err = json.Unmarshal(b, &v); err != nil {
+		return errors.Wrap(err, "Could not decode JSON readings")
+	}
+
+	if len(v) != 2 {
+		return errors.Wrap(err, "Bad sMAP reading. Need 2-tuples of (time,value)")
+	}
+
+	if time, ok = v[0].(uint64); !ok {
+		if time_weird, ok = v[0].(float64); !ok {
+			err = errors.Wrap(err, "Bad timestamp")
+			return
+		}
+		time = uint64(time_weird)
+	}
+
+	if value, ok = v[1].(float64); !ok {
+		err = errors.Wrap(err, "Bad value")
+		return
+	}
+
+	rdg.Time = time
+	rdg.Value = value
+	return
 }
