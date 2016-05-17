@@ -4,6 +4,7 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/op/go-logging"
 	"github.com/pkg/errors"
+	"time"
 )
 
 func setLogLevel(c *cli.Context) {
@@ -23,6 +24,7 @@ func getUUIDChunks(params *downloadParams) chan downloadParams {
 
 	go func(chunks chan downloadParams, params *downloadParams) {
 		idx := 0
+		current := time.Now()
 		chunk := downloadParams{
 			start:  params.start,
 			end:    params.end,
@@ -35,7 +37,8 @@ func getUUIDChunks(params *downloadParams) chan downloadParams {
 			}
 			chunk.uuids = params.uuids[idx : idx+params.uuidChunkSize]
 			idx += params.uuidChunkSize
-			log.Infof("Generating chunk %d/%d", (idx / params.uuidChunkSize), (len(params.uuids)/params.uuidChunkSize)+1)
+			log.Infof("Generating chunk %d/%d -- %s", (idx / params.uuidChunkSize), (len(params.uuids)/params.uuidChunkSize)+1, time.Since(current))
+			current = time.Now()
 			chunks <- chunk
 		}
 		close(chunks)

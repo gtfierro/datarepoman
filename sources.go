@@ -82,5 +82,3 @@ type source interface {
 	AddDestination(dest destination)
 	Download(c *cli.Context) error
 }
-
-//*********** sMAP Source *************//
