@@ -28,6 +28,10 @@ func getUUIDChunks(params *downloadParams) chan downloadParams {
 			end:   params.end,
 		}
 		for idx <= len(params.uuids) {
+			upperBound := idx + params.uuidChunkSize
+			if upperBound >= len(params.uuids) {
+				upperBound = len(params.uuids) - 1
+			}
 			chunk.uuids = params.uuids[idx : idx+params.uuidChunkSize]
 			idx += params.uuidChunkSize
 			log.Infof("Generating chunk %d/%d", (idx / params.uuidChunkSize), (len(params.uuids)/params.uuidChunkSize)+1)

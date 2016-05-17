@@ -59,7 +59,6 @@ func main() {
 				},
 				cli.StringFlag{
 					Name:  "where",
-					Value: "has uuid",
 					Usage: "Metadata query to download UUIDs",
 				},
 				//TODO: document  the formats

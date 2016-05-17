@@ -62,19 +62,30 @@ func (smap *sMAPSource) AddDestination(dest destination) {
 }
 
 func (smap *sMAPSource) Download(c *cli.Context) error {
+	var resp *http.Response
+	var err error
 	// if getting all UUIDs, need to fetch from server
 	params := getDownloadParams(c)
+	var buf *bytes.Buffer
 	if params.all {
-		var buf = bytes.NewBufferString("select distinct uuid where has uuid;")
-		resp, err := smap.client.Post(smap.host, MIME_TEXT, buf)
-		if err != nil {
-			return errors.Wrap(err, "Could not post query to sMAP archiver")
-		}
-		var decoder = json.NewDecoder(resp.Body)
-		if err := decoder.Decode(&params.uuids); err != nil {
-			return errors.Wrap(err, "Could not decode JSON from sMAP archiver")
-		}
+		buf = bytes.NewBufferString("select distinct uuid where has uuid;")
+	} else if c.String("where") != "" {
+		buf = bytes.NewBufferString(fmt.Sprintf("select distinct uuid where %s;", c.String("where")))
+	} else {
+		return smap.startDownloadLoop(params)
 	}
+	resp, err = smap.client.Post(smap.host, MIME_TEXT, buf)
+	if err != nil {
+		return errors.Wrap(err, "Could not post query to sMAP archiver")
+	}
+	var decoder = json.NewDecoder(resp.Body)
+	if err := decoder.Decode(&params.uuids); err != nil {
+		return errors.Wrap(err, "Could not decode JSON from sMAP archiver")
+	}
+	return smap.startDownloadLoop(params)
+}
+
+func (smap *sMAPSource) startDownloadLoop(params *downloadParams) error {
 	params.print()
 	log.Debug("Generated sMAP query:", params.ToSmap())
 	for downloadChunk := range getUUIDChunks(params) {
