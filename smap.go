@@ -115,6 +115,18 @@ func (smap *sMAPSource) doDownload(params downloadParams) error {
 		return errors.Wrap(err, "Could not decode JSON from sMAP archiver")
 	}
 	for _, msg := range data {
+		if len(msg.Readings) == 100000 { // need to fetch again
+			// get last date
+			newparams := params
+			newparams.start = time.Unix(int64(msg.Readings[len(msg.Readings)-1].Time)/1000, 0)
+			newparams.uuids = []string{msg.UUID}
+			log.Infof("Start new loop for %s", msg.UUID)
+			params.print()
+			smap.doDownload(newparams)
+		}
+	}
+
+	for _, msg := range data {
 		for _, dest := range smap.destinations {
 			for row := range rowsFromSmapMessage(&msg) {
 				dest.WriteRow(row)
@@ -169,7 +181,7 @@ func (smap *sMAPSource) LoadMetadata(c *cli.Context) error {
 			continue
 		}
 		path := doc.Path
-		doc.Path = ""
+		//doc.Path = ""
 		ingestmd[path] = doc
 		var buf bytes.Buffer
 		enc := json.NewEncoder(&buf)
@@ -196,8 +208,11 @@ func (smap *sMAPSource) LoadData(c *cli.Context) error {
 		return errors.Wrap(err, "Could not open metadata file")
 	}
 
+	var alldata = make(map[string][]reading)
+
 	var reader = csv.NewReader(file)
 	reader.Read() // skip first line
+	var linenum = 0
 	for {
 		line, err := reader.Read()
 		if err == io.EOF {
@@ -205,6 +220,10 @@ func (smap *sMAPSource) LoadData(c *cli.Context) error {
 		}
 		if err != nil {
 			return errors.Wrap(err, "Could not read CSV data file")
+		}
+		linenum += 1
+		if linenum%1000 == 0 {
+			log.Debugf("Processed %d lines", linenum)
 		}
 		if len(line) != 3 {
 			return fmt.Errorf("Line had more than 3 entries: %v", line)
@@ -218,9 +237,35 @@ func (smap *sMAPSource) LoadData(c *cli.Context) error {
 		if err != nil {
 			return errors.Wrap(err, "Could not parse value as float")
 		}
-		//fmt.Println(uuid, time, uint64(time.Unix())*1000)
-		//return nil
-		msg := smapMessage{UUID: uuid, Readings: []reading{reading{Time: uint64(time.Unix()) * 1e9, Value: value}}}
+		newReading := reading{Time: uint64(time.Unix() * 1e9), Value: value}
+
+		if readings, found := alldata[uuid]; found {
+			alldata[uuid] = append(readings, newReading)
+		} else {
+			alldata[uuid] = []reading{newReading}
+		}
+
+		if len(alldata[uuid]) >= 1000 {
+			msg := smapMessage{UUID: uuid, Readings: alldata[uuid]}
+			var buf bytes.Buffer
+			enc := json.NewEncoder(&buf)
+			if err := enc.Encode(map[string]interface{}{msg.Path: msg}); err != nil {
+				return errors.Wrap(err, "Could not ingest data")
+			}
+			log.Debugf("Posting data to %v: %d", smap.host, buf.Len())
+			resp, err = smap.client.Post(smap.host, MIME_JSON, &buf)
+			if err != nil {
+				return errors.Wrap(err, "Could not post data to sMAP archiver")
+			}
+			if resp.StatusCode != 200 {
+				return errors.Wrap(errors.New(resp.Status), "Could not save data to sMAP archiver")
+			}
+			delete(alldata, uuid)
+		}
+	}
+
+	for uuid, readings := range alldata { // last cleanup
+		msg := smapMessage{UUID: uuid, Readings: readings}
 		var buf bytes.Buffer
 		enc := json.NewEncoder(&buf)
 		if err := enc.Encode(map[string]interface{}{msg.Path: msg}); err != nil {

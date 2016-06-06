@@ -5,7 +5,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func download(c *cli.Context) {
+func Download(c *cli.Context) {
 	setLogLevel(c)
 	var downloader source
 	switch sourcetype := c.GlobalString("sourcetype"); sourcetype {
@@ -31,7 +31,7 @@ func download(c *cli.Context) {
 	}
 }
 
-func metadata(c *cli.Context) {
+func Metadata(c *cli.Context) {
 	setLogLevel(c)
 	var downloader source
 	switch sourcetype := c.GlobalString("sourcetype"); sourcetype {
@@ -51,7 +51,7 @@ func metadata(c *cli.Context) {
 	}
 }
 
-func ingest(c *cli.Context) {
+func Ingest(c *cli.Context) {
 	setLogLevel(c)
 	var downloader source
 	switch sourcetype := c.GlobalString("sourcetype"); sourcetype {
@@ -65,9 +65,11 @@ func ingest(c *cli.Context) {
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "Could not connect"))
 	}
+	log.Notice("Loading metadata")
 	if err := downloader.LoadMetadata(c); err != nil {
 		log.Fatal(errors.Wrap(err, "Could not load metadata"))
 	}
+	log.Notice("Loading timeseries data")
 	if err := downloader.LoadData(c); err != nil {
 		log.Fatal(errors.Wrap(err, "Could not load data"))
 	}

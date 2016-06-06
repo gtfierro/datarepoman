@@ -65,7 +65,7 @@ func (dl *downloadParams) ToSmap() string {
 		start *= 1000
 		end *= 1000
 	}
-	query := fmt.Sprintf("select data in (%d, %d) where ", start, end)
+	query := fmt.Sprintf("select data in (%d, %d) limit 100000 where ", start, end)
 	for i, uuid := range dl.uuids {
 		query = query + fmt.Sprintf("uuid = '%s'", uuid)
 		if i < (len(dl.uuids) - 1) {

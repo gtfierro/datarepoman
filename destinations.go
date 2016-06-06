@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -62,5 +63,24 @@ func (csvfile *CSVDestination) WriteRow(r row) error {
 		return err
 	}
 	csvfile.writer.Flush()
+	return nil
+}
+
+type JSONDestination struct {
+	filename string
+	writer   *json.Encoder
+}
+
+func CreateJSONDestination(filename string) *JSONDestination {
+	dest := &JSONDestination{filename: filename}
+	f, err := os.Create(filename)
+	if err != nil {
+		log.Fatal(err, "Could not open JSON destination")
+	}
+	dest.writer = json.NewEncoder(f)
+	return dest
+}
+
+func (jsonfile *JSONDestination) WriteRow(r row) error {
 	return nil
 }

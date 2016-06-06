@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/codegangsta/cli"
 	"github.com/op/go-logging"
+	"github.com/pkg/profile"
 	"os"
 )
 
@@ -46,7 +47,7 @@ func main() {
 			Name:    "download",
 			Aliases: []string{"dl"},
 			Usage:   "Download data from some external source, e.g. sMAP, ReadingDB, BtrDB",
-			Action:  download,
+			Action:  Download,
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:  "uuids",
@@ -91,7 +92,7 @@ func main() {
 		{
 			Name:   "metadata",
 			Usage:  "Download metadata",
-			Action: metadata,
+			Action: Metadata,
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:  "uuids",
@@ -111,7 +112,7 @@ func main() {
 		{
 			Name:   "ingest",
 			Usage:  "Load data in via sMAP",
-			Action: ingest,
+			Action: Ingest,
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:  "metadata,md",
@@ -126,6 +127,8 @@ func main() {
 			},
 		},
 	}
+
+	defer profile.Start(profile.BlockProfile, profile.ProfilePath(".")).Stop()
 
 	app.Run(os.Args)
 }
